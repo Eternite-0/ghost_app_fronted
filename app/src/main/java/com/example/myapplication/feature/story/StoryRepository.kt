@@ -2,6 +2,7 @@ package com.example.myapplication.feature.story
 
 import com.example.myapplication.core.model.BaseResponse
 import com.example.myapplication.core.model.CreateStoryRequest
+import com.example.myapplication.core.model.MapStoriesPayload
 import com.example.myapplication.core.model.PagedResponse
 import com.example.myapplication.core.model.Story
 import com.example.myapplication.core.network.StoryService
@@ -23,7 +24,7 @@ class StoryRepository(private val storyService: StoryService) {
         return handleResponse(storyService.getPublishedStories(page, limit, keyword, category))
     }
 
-    suspend fun getStoriesOnMap(latitude: Double, longitude: Double, radius: Int = 5000): Result<Map<String, Any>> {
+    suspend fun getStoriesOnMap(latitude: Double, longitude: Double, radius: Int = 5000): Result<MapStoriesPayload> {
         return handleResponse(storyService.getStoriesOnMap(latitude, longitude, radius))
     }
 

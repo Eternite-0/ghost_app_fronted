@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.model.StoryMapMarker
 import com.example.myapplication.core.model.UiState
 import com.example.myapplication.feature.story.StoryRepository
-import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,24 +16,13 @@ class MapViewModel(private val repository: StoryRepository) : ViewModel() {
     private val _uiState = MutableStateFlow<UiState<List<StoryMapMarker>>>(UiState.Loading)
     val uiState: StateFlow<UiState<List<StoryMapMarker>>> = _uiState.asStateFlow()
 
-    fun loadStories(lat: Double, lon: Double) {
+    fun loadStories(lat: Double, lon: Double, radiusMeters: Int = 5000) {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
-            val result = repository.getStoriesOnMap(lat, lon)
+            val result = repository.getStoriesOnMap(lat, lon, radiusMeters)
             if (result.isSuccess) {
-                val data = result.getOrThrow()
-                // The "stories" key in the map is a List<StoryMapMarker> (in JSON), but GSON deserializes generic Maps as Map<String, Any>
-                // We need to carefully convert it. In a real app, defining specific response types is better.
-                // Assuming "stories" is a List of LinkedTreeMap or similar.
-                try {
-                   val storiesList = data["stories"] as? List<*>
-                   val markers = storiesList?.map {
-                       Gson().fromJson(Gson().toJson(it), StoryMapMarker::class.java)
-                   } ?: emptyList()
-                   _uiState.value = UiState.Success(markers)
-                } catch (e: Exception) {
-                    _uiState.value = UiState.Error("Failed to parse map data")
-                }
+                val markers = result.getOrThrow().stories
+                _uiState.value = UiState.Success(markers)
             } else {
                 _uiState.value = UiState.Error(result.exceptionOrNull()?.message ?: "Failed to load stories")
             }

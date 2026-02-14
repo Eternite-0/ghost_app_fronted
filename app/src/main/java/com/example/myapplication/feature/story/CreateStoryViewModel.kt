@@ -20,8 +20,10 @@ class CreateStoryViewModel(private val repository: StoryRepository) : ViewModel(
         title: String,
         content: String,
         category: String,
-        lat: Double,
-        lon: Double,
+        latitude: Double,
+        longitude: Double,
+        address: String?,
+        placeName: String?,
         image: File?,
         mapStory: Boolean
     ) {
@@ -31,10 +33,10 @@ class CreateStoryViewModel(private val repository: StoryRepository) : ViewModel(
                 title = title,
                 content = content,
                 category = category,
-                latitude = lat,
-                longitude = lon,
-                address = null,
-                placeName = null,
+                latitude = latitude,
+                longitude = longitude,
+                address = address,
+                placeName = placeName,
                 mapStory = mapStory
             )
             val result = repository.createStory(request, image)

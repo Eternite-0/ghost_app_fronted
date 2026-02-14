@@ -10,6 +10,11 @@ data class StoryMapMarker(
     @SerializedName("likes_count") val likesCount: Int
 )
 
+data class MapStoriesPayload(
+    @SerializedName("stories") val stories: List<StoryMapMarker> = emptyList(),
+    @SerializedName("total") val total: Int = 0
+)
+
 data class Story(
     @SerializedName("id") val id: String,
     @SerializedName("title") val title: String,
@@ -30,8 +35,8 @@ data class Story(
 )
 
 data class Location(
-    @SerializedName("latitude") val latitude: Double,
-    @SerializedName("longitude") val longitude: Double,
+    @SerializedName("latitude") val latitude: Double?,
+    @SerializedName("longitude") val longitude: Double?,
     @SerializedName("address") val address: String? = null
 )
 

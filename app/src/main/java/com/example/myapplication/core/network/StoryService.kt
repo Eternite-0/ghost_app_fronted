@@ -1,6 +1,7 @@
 package com.example.myapplication.core.network
 
 import com.example.myapplication.core.model.BaseResponse
+import com.example.myapplication.core.model.MapStoriesPayload
 import com.example.myapplication.core.model.PagedResponse
 import com.example.myapplication.core.model.Story
 import com.example.myapplication.core.model.StoryMapMarker
@@ -24,7 +25,7 @@ interface StoryService {
         @Query("longitude") longitude: Double,
         @Query("radius") radius: Int = 5000,
         @Query("category") category: String? = null
-    ): Response<BaseResponse<Map<String, Any>>> // "stories" key contains list
+    ): Response<BaseResponse<MapStoriesPayload>>
 
     @GET("api/stories/{storyId}")
     suspend fun getStoryById(@Path("storyId") storyId: String): Response<BaseResponse<Story>>
