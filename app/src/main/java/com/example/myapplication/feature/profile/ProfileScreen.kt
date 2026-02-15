@@ -1,5 +1,10 @@
 package com.example.myapplication.feature.profile
 
+import android.content.Context
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,11 +32,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.myapplication.core.network.ImageUrlResolver
 import com.example.myapplication.core.model.Comment
 import com.example.myapplication.core.model.Story
 import com.example.myapplication.core.model.UiState
 import com.example.myapplication.core.model.User
 import com.example.myapplication.core.model.UserPublicResponse
+import java.io.File
+import java.io.FileOutputStream
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -53,6 +61,17 @@ fun ProfileScreen(
     val myFollowersState by viewModel.myFollowers.collectAsState()
     val myFollowingState by viewModel.myFollowing.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
+    val avatarUploading by viewModel.avatarUploading.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val avatarPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        val file = uri?.let { getFileFromUri(context, it) }
+        if (file != null) {
+            viewModel.uploadAvatar(file)
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadProfile()
@@ -115,6 +134,8 @@ fun ProfileScreen(
                         myFollowersState = myFollowersState,
                         myFollowingState = myFollowingState,
                         onNavigateToStory = onNavigateToStory,
+                        avatarUploading = avatarUploading,
+                        onUploadAvatar = { avatarPickerLauncher.launch("image/*") },
                         onLogout = {
                             viewModel.logout()
                             onLogout()
@@ -148,6 +169,8 @@ fun ProfileContent(
     myFollowersState: UiState<List<UserPublicResponse>>,
     myFollowingState: UiState<List<UserPublicResponse>>,
     onNavigateToStory: (String) -> Unit,
+    avatarUploading: Boolean,
+    onUploadAvatar: () -> Unit,
     onLogout: () -> Unit
 ) {
     LazyColumn(
@@ -156,7 +179,7 @@ fun ProfileContent(
     ) {
         // Header Section
         item {
-            ProfileHeader(user, onLogout)
+            ProfileHeader(user, avatarUploading, onUploadAvatar, onLogout)
         }
 
         // Tabs Section
@@ -251,7 +274,13 @@ fun EmptyItem(message: String) {
 }
 
 @Composable
-fun ProfileHeader(user: User, onLogout: () -> Unit) {
+fun ProfileHeader(
+    user: User,
+    avatarUploading: Boolean,
+    onUploadAvatar: () -> Unit,
+    onLogout: () -> Unit
+) {
+    val resolvedAvatarUrl = ImageUrlResolver.resolve(user.avatarUrl)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -260,17 +289,48 @@ fun ProfileHeader(user: User, onLogout: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
-            modifier = Modifier.size(100.dp)
+            modifier = Modifier
+                .size(100.dp)
+                .clickable(enabled = !avatarUploading) { onUploadAvatar() }
         ) {
             AsyncImage(
-                model = user.avatarUrl ?: "https://via.placeholder.com/150",
+                model = resolvedAvatarUrl ?: "https://via.placeholder.com/150",
                 contentDescription = "Avatar",
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
                     .background(Color.LightGray),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                onSuccess = {
+                    Log.d("ProfileAvatar", "load success url=$resolvedAvatarUrl")
+                },
+                onError = { state ->
+                    Log.e(
+                        "ProfileAvatar",
+                        "load failed url=$resolvedAvatarUrl error=${state.result.throwable.message}",
+                        state.result.throwable
+                    )
+                }
             )
+            if (avatarUploading) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(30.dp),
+                    strokeWidth = 3.dp,
+                    color = Color.White
+                )
+            } else {
+                Text(
+                    text = "换头像",
+                    fontSize = 11.sp,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .background(Color(0xAA000000), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -389,7 +449,7 @@ fun ProfileUserItem(user: UserPublicResponse) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = user.avatarUrl ?: "https://via.placeholder.com/150",
+                model = ImageUrlResolver.resolve(user.avatarUrl) ?: "https://via.placeholder.com/150",
                 contentDescription = null,
                 modifier = Modifier
                     .size(50.dp)
@@ -434,7 +494,7 @@ fun ProfileStoryItem(story: Story, onNavigateToStory: (String) -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = story.imageUrl,
+                model = ImageUrlResolver.resolve(story.imageUrl),
                 contentDescription = null,
                 modifier = Modifier
                     .size(60.dp)
@@ -493,5 +553,19 @@ private fun timeAgo(createdAt: String): String {
         }
     } catch (_: Exception) {
         createdAt
+    }
+}
+
+private fun getFileFromUri(context: Context, uri: Uri): File? {
+    return try {
+        val input = context.contentResolver.openInputStream(uri) ?: return null
+        val file = File.createTempFile("avatar", ".jpg", context.cacheDir)
+        val output = FileOutputStream(file)
+        input.copyTo(output)
+        input.close()
+        output.close()
+        file
+    } catch (_: Exception) {
+        null
     }
 }

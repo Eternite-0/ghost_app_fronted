@@ -33,6 +33,15 @@ class NotificationRepository(
         }
     }
 
+    suspend fun deleteNotification(notificationId: String): Result<Unit> {
+        val response = notificationService.deleteNotification(notificationId)
+        return if (response.isSuccessful) {
+            Result.success(Unit)
+        } else {
+            Result.failure(Exception(response.errorBody()?.string() ?: "Unknown error"))
+        }
+    }
+
     private fun <T> handleResponse(response: Response<BaseResponse<T>>): Result<T> {
         if (response.isSuccessful) {
             val body = response.body()

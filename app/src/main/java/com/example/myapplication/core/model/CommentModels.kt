@@ -6,13 +6,14 @@ data class Comment(
     @SerializedName("id") val id: String,
     @SerializedName("content") val content: String,
     @SerializedName("author") val author: Author,
-    @SerializedName("likes_count") val likesCount: Int,
-    @SerializedName("parent_id") val parentId: String?,
-    @SerializedName("replies_count") val repliesCount: Long,
-    @SerializedName("created_at") val createdAt: String
+    @SerializedName(value = "likes_count", alternate = ["likesCount"]) val likesCount: Int,
+    @SerializedName(value = "parent_id", alternate = ["parentId"]) val parentId: String?,
+    @SerializedName(value = "replies_count", alternate = ["repliesCount"]) val repliesCount: Long,
+    @SerializedName(value = "created_at", alternate = ["createdAt"]) val createdAt: String,
+    @SerializedName(value = "is_owner", alternate = ["isOwner"]) val isOwner: Boolean = false
 )
 
 data class CreateCommentRequest(
     @SerializedName("content") val content: String,
-    @SerializedName("parentId") val parentId: String? = null
+    @SerializedName("parent_id") val parentId: String? = null
 )

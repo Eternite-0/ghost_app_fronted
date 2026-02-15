@@ -48,6 +48,31 @@ class NotificationViewModel(
             }
         }
     }
+
+    fun deleteNotification(notificationId: String) {
+        viewModelScope.launch {
+            val result = repository.deleteNotification(notificationId)
+            if (result.isSuccess) {
+                // 从当前列表中移除该通知
+                val currentState = _uiState.value
+                if (currentState is UiState.Success) {
+                    val updatedList = currentState.data.filter { it.id != notificationId }
+                    _uiState.value = UiState.Success(updatedList)
+                }
+                // 更新未读数
+                loadUnreadCount()
+            }
+        }
+    }
+
+    private fun loadUnreadCount() {
+        viewModelScope.launch {
+            val unreadResult = repository.getUnreadCount()
+            if (unreadResult.isSuccess) {
+                _unreadCount.value = unreadResult.getOrThrow()
+            }
+        }
+    }
 }
 
 class NotificationViewModelFactory(

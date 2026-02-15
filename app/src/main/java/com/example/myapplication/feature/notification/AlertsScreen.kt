@@ -1,6 +1,11 @@
 package com.example.myapplication.feature.notification
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,18 +15,24 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,15 +49,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.myapplication.core.model.NotificationItem
 import com.example.myapplication.core.model.UiState
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,7 +120,22 @@ fun AlertsScreen(
                 NavigationBarItem(
                     selected = true,
                     onClick = {},
-                    icon = { Icon(Icons.Default.Notifications, contentDescription = "Alerts") },
+                    icon = {
+                        BadgedBox(
+                            badge = {
+                                if (unreadCount > 0) {
+                                    Badge {
+                                        Text(
+                                            text = if (unreadCount > 9) "9+" else unreadCount.toString(),
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Notifications, contentDescription = "Alerts")
+                        }
+                    },
                     label = { Text("Alerts") }
                 )
                 NavigationBarItem(
@@ -154,7 +189,12 @@ fun AlertsScreen(
                             Text("No alerts yet")
                         }
                     } else {
-                        AlertsList(items = state.data)
+                        AlertsList(
+                            items = state.data,
+                            onDelete = { notificationId ->
+                                viewModel.deleteNotification(notificationId)
+                            }
+                        )
                     }
                 }
             }
@@ -163,34 +203,204 @@ fun AlertsScreen(
 }
 
 @Composable
-private fun AlertsList(items: List<NotificationItem>) {
+private fun AlertsList(
+    items: List<NotificationItem>,
+    onDelete: (String) -> Unit
+) {
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(items) { item ->
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (item.isRead) Color.White else Color(0xFFEAF3FF)
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        items(items, key = { it.id }) { item ->
+            SwipeToDeleteItem(
+                onDelete = { onDelete(item.id) }
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = formatType(item.type),
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E4B84)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = item.content, color = Color(0xFF2A3E5B))
-                    Spacer(modifier = Modifier.height(6.dp))
-                    val senderText = item.sender?.username ?: "System"
-                    Text(
-                        text = "$senderText | ${timeAgo(item.createdAt)}",
-                        color = Color(0xFF5F7FA8)
+                NotificationCard(item = item)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwipeToDeleteItem(
+    onDelete: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val density = LocalDensity.current
+    val deleteButtonWidth = with(density) { 80.dp.toPx() }
+
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var isRevealed by remember { mutableStateOf(false) }
+
+    // 动画偏移
+    val animatedOffsetX by animateFloatAsState(
+        targetValue = offsetX,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "offsetAnimation"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+    ) {
+        // 红色删除背景
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFFFF4444))
+                .clickable { onDelete() },
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(end = 24.dp)
+                    .clickable { onDelete() },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Delete",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            }
+        }
+
+        // 可滑动的内容
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(animatedOffsetX.roundToInt(), 0) }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            // 如果滑动超过一半的删除按钮宽度，则展开删除按钮
+                            if (offsetX < -deleteButtonWidth / 2) {
+                                offsetX = -deleteButtonWidth
+                                isRevealed = true
+                            } else {
+                                offsetX = 0f
+                                isRevealed = false
+                            }
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            val newOffset = offsetX + dragAmount
+                            // 限制滑动范围：左滑最多显示删除按钮，右滑不能超过0
+                            offsetX = newOffset.coerceIn(-deleteButtonWidth, 0f)
+                        }
                     )
                 }
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun NotificationCard(item: NotificationItem) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (item.isRead) Color.White else Color(0xFFEAF3FF)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 图标指示器
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when (item.type.uppercase()) {
+                            "SYSTEM_WELCOME" -> Color(0xFF4CAF50)
+                            "LIKE" -> Color(0xFFE91E63)
+                            "COMMENT" -> Color(0xFF2196F3)
+                            "REPLY" -> Color(0xFF9C27B0)
+                            "STORY_APPROVED" -> Color(0xFF4CAF50)
+                            "STORY_REJECTED" -> Color(0xFFFF5722)
+                            else -> Color(0xFF607D8B)
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = when (item.type.uppercase()) {
+                        "SYSTEM_WELCOME" -> "W"
+                        "LIKE" -> "L"
+                        "COMMENT" -> "C"
+                        "REPLY" -> "R"
+                        "STORY_APPROVED" -> "A"
+                        "STORY_REJECTED" -> "X"
+                        else -> "?"
+                    },
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            // 内容区域
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = formatType(item.type),
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E4B84),
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = item.content,
+                    color = Color(0xFF2A3E5B),
+                    fontSize = 13.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                val senderText = item.sender?.username ?: "System"
+                Text(
+                    text = "$senderText | ${timeAgo(item.createdAt)}",
+                    color = Color(0xFF5F7FA8),
+                    fontSize = 11.sp,
+                    maxLines = 1
+                )
+            }
+
+            // 未读指示点
+            if (!item.isRead) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF2196F3))
+                )
             }
         }
     }
@@ -210,9 +420,9 @@ private fun formatType(type: String): String {
 
 private fun timeAgo(createdAt: String): String {
     return try {
-        val created = Instant.parse(createdAt)
-        val now = Instant.now()
-        val minutes = ChronoUnit.MINUTES.between(created, now)
+        val created = java.time.Instant.parse(createdAt)
+        val now = java.time.Instant.now()
+        val minutes = java.time.temporal.ChronoUnit.MINUTES.between(created, now)
         when {
             minutes < 1 -> "just now"
             minutes < 60 -> "${minutes}m ago"

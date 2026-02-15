@@ -6,19 +6,24 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 
-class AuthInterceptor(private val tokenManager: TokenManager) : Interceptor {
+class AuthInterceptor(
+    private val tokenManager: TokenManager,
+    private val backendHost: String
+) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val token = runBlocking { tokenManager.accessToken.first() }
+        val originalRequest = chain.request()
+        val isBackendRequest = originalRequest.url.host.equals(backendHost, ignoreCase = true)
 
-        val requestBuilder = chain.request().newBuilder()
+        val requestBuilder = originalRequest.newBuilder()
 
-        if (!token.isNullOrEmpty()) {
+        if (isBackendRequest && !token.isNullOrEmpty()) {
             requestBuilder.addHeader("Authorization", "Bearer $token")
         }
 
         val response = chain.proceed(requestBuilder.build())
 
-        if (response.code == 401) {
+        if (isBackendRequest && response.code == 401) {
             runBlocking { tokenManager.clearToken() }
         }
 

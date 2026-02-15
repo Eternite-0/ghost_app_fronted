@@ -6,6 +6,7 @@ import com.google.gson.FieldNamingPolicy
 import com.google.gson.GsonBuilder
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
@@ -14,11 +15,13 @@ object RetrofitClient {
 
     fun getClient(context: Context): Retrofit {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            // Avoid printing binary multipart bodies (image bytes) into logcat.
+            level = HttpLoggingInterceptor.Level.BASIC
         }
 
         val tokenManager = TokenManager(context)
-        val authInterceptor = AuthInterceptor(tokenManager)
+        val backendHost = BASE_URL.toHttpUrl().host
+        val authInterceptor = AuthInterceptor(tokenManager, backendHost)
 
         val client = OkHttpClient.Builder()
             .addInterceptor(logging)

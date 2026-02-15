@@ -40,6 +40,7 @@ interface StoryService {
         @Part("longitude") longitude: RequestBody,
         @Part("address") address: RequestBody?,
         @Part("placeName") placeName: RequestBody?,
+        @Part("imageUrl") imageUrl: RequestBody?,
         @Part("mapStory") mapStory: RequestBody,
         @Part image: MultipartBody.Part?
     ): Response<BaseResponse<Story>>
@@ -55,4 +56,7 @@ interface StoryService {
 
     @DELETE("api/stories/{storyId}/favorite")
     suspend fun unfavoriteStory(@Path("storyId") storyId: String): Response<BaseResponse<Map<String, Int>>>
+
+    @DELETE("api/stories/{storyId}")
+    suspend fun deleteStory(@Path("storyId") storyId: String): Response<BaseResponse<Void>>
 }

@@ -48,6 +48,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.util.Log
+import com.example.myapplication.core.network.ImageUrlResolver
 import com.example.myapplication.core.model.StoryCategories
 import com.example.myapplication.core.model.Story
 import com.example.myapplication.core.model.UiState
@@ -265,12 +267,22 @@ private fun StoryCard(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 AsyncImage(
-                    model = story.imageUrl,
+                    model = ImageUrlResolver.resolve(story.imageUrl),
                     contentDescription = story.title,
                     modifier = Modifier
                         .size(92.dp)
                         .clip(RoundedCornerShape(10.dp)),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    onSuccess = {
+                        Log.d("SearchImage", "load success url=${story.imageUrl}")
+                    },
+                    onError = { state ->
+                        Log.e(
+                            "SearchImage",
+                            "load failed url=${story.imageUrl} error=${state.result.throwable.message}",
+                            state.result.throwable
+                        )
+                    }
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(

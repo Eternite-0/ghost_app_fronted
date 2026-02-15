@@ -9,12 +9,21 @@ import retrofit2.Response
 
 class CommentRepository(private val commentService: CommentService) {
 
-    suspend fun getComments(storyId: String, page: Int, limit: Int): Result<PagedResponse<Comment>> {
-        return handleResponse(commentService.getComments(storyId, page, limit))
+    suspend fun getComments(storyId: String, page: Int, limit: Int, parentId: String? = null): Result<PagedResponse<Comment>> {
+        return handleResponse(commentService.getComments(storyId, page, limit, parentId))
     }
 
-    suspend fun createComment(storyId: String, content: String): Result<Comment> {
-        return handleResponse(commentService.createComment(storyId, CreateCommentRequest(content)))
+    suspend fun createComment(storyId: String, content: String, parentId: String? = null): Result<Comment> {
+        return handleResponse(commentService.createComment(storyId, CreateCommentRequest(content, parentId)))
+    }
+
+    suspend fun deleteComment(storyId: String, commentId: String): Result<Boolean> {
+        val response = commentService.deleteComment(storyId, commentId)
+        return if (response.isSuccessful) {
+            Result.success(true)
+        } else {
+            Result.failure(Exception(response.errorBody()?.string() ?: "Unknown error"))
+        }
     }
 
     private fun <T> handleResponse(response: Response<BaseResponse<T>>): Result<T> {

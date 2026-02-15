@@ -21,6 +21,10 @@ interface UserService {
     @POST("api/users/me/avatar")
     suspend fun uploadAvatar(@Part avatar: MultipartBody.Part): Response<BaseResponse<Map<String, String>>>
 
+    @FormUrlEncoded
+    @POST("api/users/me/avatar")
+    suspend fun uploadAvatarByUrl(@Field("avatarUrl") avatarUrl: String): Response<BaseResponse<Map<String, String>>>
+
     @GET("api/users/me/stories")
     suspend fun getMyStories(
         @Query("page") page: Int,

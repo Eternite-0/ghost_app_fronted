@@ -6,6 +6,7 @@ data class StoryMapMarker(
     @SerializedName("id") val id: String,
     @SerializedName("title") val title: String,
     @SerializedName("category") val category: String,
+    @SerializedName("image_url") val imageUrl: String? = null,
     @SerializedName("location") val location: Location,
     @SerializedName("likes_count") val likesCount: Int
 )
@@ -31,7 +32,8 @@ data class Story(
     @SerializedName("status") val status: String,
     @SerializedName("created_at") val createdAt: String,
     @SerializedName("is_liked") val isLiked: Boolean?,
-    @SerializedName("is_favorited") val isFavorited: Boolean?
+    @SerializedName("is_favorited") val isFavorited: Boolean?,
+    @SerializedName("is_owner") val isOwner: Boolean?
 )
 
 data class Location(

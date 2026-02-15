@@ -1,5 +1,6 @@
 package com.example.myapplication.feature.profile
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -13,11 +14,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 
 class ProfileViewModel(
     private val repository: UserRepository,
     private val tokenManager: TokenManager
 ) : ViewModel() {
+    companion object {
+        private const val TAG = "ProfileViewModel"
+    }
 
     private val _uiState = MutableStateFlow<UiState<User>>(UiState.Loading)
     val uiState: StateFlow<UiState<User>> = _uiState.asStateFlow()
@@ -40,12 +45,16 @@ class ProfileViewModel(
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
+    private val _avatarUploading = MutableStateFlow(false)
+    val avatarUploading: StateFlow<Boolean> = _avatarUploading.asStateFlow()
+
     fun loadProfile() {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
             val result = repository.getCurrentUser()
             if (result.isSuccess) {
                 val user = result.getOrThrow()
+                Log.d(TAG, "loadProfile avatarUrl=${user.avatarUrl}")
                 _uiState.value = UiState.Success(user)
                 // Load initial tab content
                 refreshCurrentTab()
@@ -136,6 +145,19 @@ class ProfileViewModel(
     fun logout() {
         viewModelScope.launch {
             tokenManager.clearToken()
+        }
+    }
+
+    fun uploadAvatar(file: File) {
+        viewModelScope.launch {
+            _avatarUploading.value = true
+            val result = repository.uploadAvatar(file)
+            _avatarUploading.value = false
+            if (result.isSuccess) {
+                Log.d(TAG, "uploadAvatar newAvatarUrl=${result.getOrThrow()}")
+                val current = (_uiState.value as? UiState.Success)?.data ?: return@launch
+                _uiState.value = UiState.Success(current.copy(avatarUrl = result.getOrThrow()))
+            }
         }
     }
 }

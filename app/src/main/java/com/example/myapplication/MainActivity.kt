@@ -12,6 +12,7 @@ import com.example.myapplication.core.network.CommentService
 import com.example.myapplication.core.network.NotificationService
 import com.example.myapplication.core.network.RetrofitClient
 import com.example.myapplication.core.network.StoryService
+import com.example.myapplication.core.network.UploadService
 import com.example.myapplication.core.network.UserService
 import com.example.myapplication.core.storage.TokenManager
 import com.example.myapplication.feature.auth.AuthRepository
@@ -37,11 +38,12 @@ class MainActivity : ComponentActivity() {
         val commentService = retrofit.create(CommentService::class.java)
         val userService = retrofit.create(UserService::class.java)
         val notificationService = retrofit.create(NotificationService::class.java)
+        val uploadService = retrofit.create(UploadService::class.java)
 
         val authRepository = AuthRepository(authService, tokenManager)
-        val storyRepository = StoryRepository(storyService)
+        val storyRepository = StoryRepository(storyService, uploadService)
         val commentRepository = CommentRepository(commentService)
-        val userRepository = UserRepository(userService)
+        val userRepository = UserRepository(userService, uploadService)
         val notificationRepository = NotificationRepository(notificationService)
 
         // Determine start destination based on token existence

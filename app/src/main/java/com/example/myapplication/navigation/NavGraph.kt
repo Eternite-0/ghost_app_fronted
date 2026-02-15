@@ -96,7 +96,8 @@ fun AppNavGraph(
                 onNavigateToSearch = { navController.navigate("search") },
                 onNavigateToCreate = { navController.navigate("create_story?mapStory=true") },
                 onNavigateToProfile = { navController.navigate("profile") },
-                onNavigateToNotifications = { navController.navigate("notifications") }
+                onNavigateToNotifications = { navController.navigate("notifications") },
+                onNavigateToStory = { storyId -> navController.navigate("story_detail/$storyId") }
             )
         }
 

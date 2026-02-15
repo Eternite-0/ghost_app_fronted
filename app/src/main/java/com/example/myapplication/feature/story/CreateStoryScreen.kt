@@ -3,6 +3,7 @@ package com.example.myapplication.feature.story
 import android.Manifest
 import android.content.Context
 import android.net.Uri
+import android.view.MotionEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +28,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,11 +41,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.core.location.LocationHelper
 import com.example.myapplication.core.model.StoryCategories
 import com.example.myapplication.core.model.UiState
 import kotlinx.coroutines.launch
+import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.MapEventsOverlay
+import org.osmdroid.views.overlay.Marker
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
@@ -84,6 +94,7 @@ fun CreateStoryScreen(
     var locationSource by remember { mutableStateOf("手动粗定位：${selectedLocationOption.name}") }
     var locationError by remember { mutableStateOf<String?>(null) }
     var locating by remember { mutableStateOf(false) }
+    var showMapPicker by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -100,6 +111,22 @@ fun CreateStoryScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         selectedImageUri = uri
+    }
+
+    if (showMapPicker) {
+        FullscreenLocationPicker(
+            initialLatitude = latitude,
+            initialLongitude = longitude,
+            onCancel = { showMapPicker = false },
+            onConfirm = { picked ->
+                latitude = picked.latitude
+                longitude = picked.longitude
+                locationSource = "地图点选"
+                locationError = null
+                showMapPicker = false
+            }
+        )
+        return
     }
 
     fun requestDeviceLocation() {
@@ -180,66 +207,75 @@ fun CreateStoryScreen(
                 }
             }
 
-            Box(modifier = Modifier.fillMaxWidth()) {
+            if (isMapStory) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { locationExpanded = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("粗定位区域: ${selectedLocationOption.name}")
+                    }
+                    DropdownMenu(
+                        expanded = locationExpanded,
+                        onDismissRequest = { locationExpanded = false }
+                    ) {
+                        locationOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.name) },
+                                onClick = {
+                                    selectedLocationOption = option
+                                    latitude = option.latitude
+                                    longitude = option.longitude
+                                    locationSource = "手动粗定位：${option.name}"
+                                    locationError = null
+                                    locationExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
                 OutlinedButton(
-                    onClick = { locationExpanded = true },
+                    onClick = {
+                        if (LocationHelper.hasLocationPermission(context)) {
+                            requestDeviceLocation()
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !locating
+                ) {
+                    Text(if (locating) "定位中..." else "使用设备定位（可选）")
+                }
+
+                OutlinedButton(
+                    onClick = { showMapPicker = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("粗定位区域: ${selectedLocationOption.name}")
+                    Text("地图点选定位（全屏）")
                 }
-                DropdownMenu(
-                    expanded = locationExpanded,
-                    onDismissRequest = { locationExpanded = false }
-                ) {
-                    locationOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option.name) },
-                            onClick = {
-                                selectedLocationOption = option
-                                latitude = option.latitude
-                                longitude = option.longitude
-                                locationSource = "手动粗定位：${option.name}"
-                                locationError = null
-                                locationExpanded = false
-                            }
+
+                Text(
+                    text = "当前位置来源：$locationSource\n坐标：${
+                        String.format(
+                            Locale.US,
+                            "%.4f, %.4f",
+                            latitude,
+                            longitude
                         )
-                    }
+                    }",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                locationError?.let {
+                    Text(text = it, color = MaterialTheme.colorScheme.error)
                 }
-            }
-
-            OutlinedButton(
-                onClick = {
-                    if (LocationHelper.hasLocationPermission(context)) {
-                        requestDeviceLocation()
-                    } else {
-                        locationPermissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION
-                            )
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !locating
-            ) {
-                Text(if (locating) "定位中..." else "使用设备定位（可选）")
-            }
-
-            Text(
-                text = "当前位置来源：$locationSource\n坐标：${
-                    String.format(
-                        Locale.US,
-                        "%.4f, %.4f",
-                        latitude,
-                        longitude
-                    )
-                }",
-                style = MaterialTheme.typography.bodyMedium
-            )
-
-            locationError?.let {
-                Text(text = it, color = MaterialTheme.colorScheme.error)
             }
 
             OutlinedTextField(
@@ -267,10 +303,26 @@ fun CreateStoryScreen(
                             title = title,
                             content = content,
                             category = category,
-                            latitude = latitude,
-                            longitude = longitude,
-                            address = selectedLocationOption.name,
-                            placeName = if (locationSource == "设备定位") "设备附近" else selectedLocationOption.name,
+                            latitude = if (isMapStory) latitude else 35.0,
+                            longitude = if (isMapStory) longitude else 103.0,
+                            address = if (isMapStory) {
+                                when (locationSource) {
+                                    "设备定位" -> "设备附近"
+                                    "地图点选" -> "地图点选"
+                                    else -> selectedLocationOption.name
+                                }
+                            } else {
+                                null
+                            },
+                            placeName = if (isMapStory) {
+                                when (locationSource) {
+                                    "设备定位" -> "设备附近"
+                                    "地图点选" -> "地图点选"
+                                    else -> selectedLocationOption.name
+                                }
+                            } else {
+                                null
+                            },
                             image = imageFile,
                             mapStory = isMapStory
                         )
@@ -287,6 +339,138 @@ fun CreateStoryScreen(
                     color = MaterialTheme.colorScheme.error
                 )
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FullscreenLocationPicker(
+    initialLatitude: Double,
+    initialLongitude: Double,
+    onCancel: () -> Unit,
+    onConfirm: (GeoPoint) -> Unit
+) {
+    val context = LocalContext.current
+    val markerRef = remember { mutableStateOf<Marker?>(null) }
+    var lastPosition by remember { mutableStateOf(GeoPoint(initialLatitude, initialLongitude)) }
+    var shouldRecenter by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        Configuration.getInstance().load(
+            context,
+            context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE)
+        )
+        Configuration.getInstance().userAgentValue = "${context.packageName}.ghoststory"
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("地图选点") },
+                navigationIcon = {
+                    IconButton(onClick = onCancel) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = { onConfirm(lastPosition) }) {
+                        Text("确认")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    MapView(ctx).apply {
+                        setTileSource(TileSourceFactory.MAPNIK)
+                        setMultiTouchControls(true)
+                        minZoomLevel = 2.0
+                        maxZoomLevel = 19.0
+                        controller.setZoom(9.0)
+                        controller.setCenter(lastPosition)
+                        setOnTouchListener { v, event ->
+                            if (event.actionMasked == MotionEvent.ACTION_DOWN || event.actionMasked == MotionEvent.ACTION_MOVE) {
+                                v.parent?.requestDisallowInterceptTouchEvent(true)
+                            }
+                            false
+                        }
+
+                        val marker = Marker(this).apply {
+                            position = lastPosition
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            title = "已选位置"
+                            isDraggable = true
+                            setOnMarkerDragListener(object : Marker.OnMarkerDragListener {
+                                override fun onMarkerDragStart(marker: Marker) = Unit
+
+                                override fun onMarkerDrag(marker: Marker) = Unit
+
+                                override fun onMarkerDragEnd(marker: Marker) {
+                                    lastPosition = marker.position
+                                }
+                            })
+                        }
+                        markerRef.value = marker
+                        overlays.add(marker)
+
+                        overlays.add(
+                            MapEventsOverlay(
+                                object : MapEventsReceiver {
+                                    override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
+                                        marker.position = p
+                                        invalidate()
+                                        lastPosition = p
+                                        return true
+                                    }
+
+                                    override fun longPressHelper(p: GeoPoint): Boolean {
+                                        marker.position = p
+                                        invalidate()
+                                        lastPosition = p
+                                        return true
+                                    }
+                                }
+                            )
+                        )
+                    }
+                },
+                update = { mapView ->
+                    if (shouldRecenter) {
+                        mapView.controller.setCenter(lastPosition)
+                        shouldRecenter = false
+                    }
+                    markerRef.value?.position = lastPosition
+                    mapView.invalidate()
+                },
+                onRelease = { mapView ->
+                    mapView.onPause()
+                    mapView.onDetach()
+                }
+            )
+
+            Text(
+                text = "单击/长按地图选点，或拖动标记后点击右上角确认。",
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(12.dp),
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Text(
+                text = String.format(Locale.US, "当前坐标：%.5f, %.5f", lastPosition.latitude, lastPosition.longitude),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(12.dp),
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }

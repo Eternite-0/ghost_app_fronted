@@ -4,8 +4,10 @@ import com.example.myapplication.core.model.BaseResponse
 import com.example.myapplication.core.model.NotificationItem
 import com.example.myapplication.core.model.PagedResponse
 import retrofit2.Response
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface NotificationService {
@@ -20,4 +22,7 @@ interface NotificationService {
 
     @POST("api/notifications/read-all")
     suspend fun markAllAsRead(): Response<BaseResponse<Void>>
+
+    @DELETE("api/notifications/{id}")
+    suspend fun deleteNotification(@Path("id") notificationId: String): Response<BaseResponse<Void>>
 }

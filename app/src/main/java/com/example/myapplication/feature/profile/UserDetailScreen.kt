@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.myapplication.core.model.UiState
+import com.example.myapplication.core.network.ImageUrlResolver
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +66,7 @@ fun UserDetailScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         AsyncImage(
-                            model = user.avatarUrl ?: "https://via.placeholder.com/150",
+                            model = ImageUrlResolver.resolve(user.avatarUrl) ?: "https://via.placeholder.com/150",
                             contentDescription = "Avatar",
                             modifier = Modifier
                                 .size(100.dp)

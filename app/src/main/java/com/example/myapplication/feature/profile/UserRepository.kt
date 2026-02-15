@@ -6,14 +6,19 @@ import com.example.myapplication.core.model.UpdateProfileRequest
 import com.example.myapplication.core.model.Story
 import com.example.myapplication.core.model.User
 import com.example.myapplication.core.network.UserService
+import com.example.myapplication.core.network.UploadService
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Response
 
 import com.example.myapplication.core.model.UserPublicResponse
 
-class UserRepository(private val userService: UserService) {
+class UserRepository(
+    private val userService: UserService,
+    private val uploadService: UploadService
+) {
 
     suspend fun getUserPublicProfile(userId: String): Result<UserPublicResponse> {
         return handleResponse(userService.getUserPublicProfile(userId))
@@ -40,13 +45,29 @@ class UserRepository(private val userService: UserService) {
     }
 
     suspend fun uploadAvatar(file: java.io.File): Result<String> {
+        val ext = file.extension.ifBlank { "jpg" }
+        val tokenResp = uploadService.getQiniuUploadToken(ext, "avatar")
+        if (!tokenResp.isSuccessful || tokenResp.body()?.data == null) {
+            return Result.failure(Exception("获取七牛上传凭证失败"))
+        }
+        val tokenData = tokenResp.body()!!.data!!
+
         val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
-        val body = MultipartBody.Part.createFormData("avatar", file.name, requestFile)
-        val response = userService.uploadAvatar(body)
+        val qiniuFile = MultipartBody.Part.createFormData("file", file.name, requestFile)
+        val tokenBody = tokenData.uploadToken.toRequestBody("text/plain".toMediaTypeOrNull())
+        val keyBody = tokenData.objectKey.toRequestBody("text/plain".toMediaTypeOrNull())
+        val uploadResp = uploadService.uploadToQiniu(tokenData.uploadUrl, tokenBody, keyBody, qiniuFile)
+        if (!uploadResp.isSuccessful) {
+            return Result.failure(Exception("上传头像到七牛失败"))
+        }
+        val uploadedKey = uploadResp.body()?.key ?: tokenData.objectKey
+        val finalUrl = "${tokenData.fileBaseUrl}/$uploadedKey"
+
+        val response = userService.uploadAvatarByUrl(finalUrl)
         if (response.isSuccessful) {
              val bodyResponse = response.body()
              if (bodyResponse != null && bodyResponse.data != null) {
-                 return Result.success(bodyResponse.data["avatar_url"] ?: "")
+                 return Result.success(bodyResponse.data["avatar_url"] ?: finalUrl)
              }
         }
         return Result.failure(Exception(response.errorBody()?.string() ?: "Unknown error"))
@@ -78,6 +99,9 @@ class UserRepository(private val userService: UserService) {
             if (body != null && body.data != null) {
                 return Result.success(body.data)
             }
+        }
+        if (response.code() == 401) {
+            return Result.failure(Exception("登录已过期，请重新登录"))
         }
         return Result.failure(Exception(response.errorBody()?.string() ?: "Unknown error"))
     }
